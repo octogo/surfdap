@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/pkg/errors"
 	ldap "gopkg.in/ldap.v2"
 )
 
@@ -35,8 +36,8 @@ type Node interface {
 	Parent() Node
 	DN() string
 	Attributes() map[string][]string
-	Search(scope SearchScope, filter string, attrs []string) (*ldap.SearchResult, error)
 	Children(filter string, attrs []string) ([]Node, error)
+	Search(scope SearchScope, filter string, attrs []string) ([]Node, error)
 }
 
 // N implements the Node interface.
@@ -75,17 +76,24 @@ func New(config Config) (Node, error) {
 		root:   nil,
 		parent: nil,
 	}
-	newNode.root = newNode
 
-	searchResult, err := newNode.Search(ScopeBase, "(objectClass=*)", []string{"dn"})
-	if err != nil {
-		return nil, err
-	}
+	newNode.Attributes()
 
-	if searchResult.Entries[0].DN != newNode.dn {
-		return nil, fmt.Errorf("unable to find baseDN: %s", newNode.dn)
-	}
 	return newNode, nil
+}
+
+// String implements the fmt.Stringer
+func (n N) String() string {
+	out := fmt.Sprintf("%s\n", n.DN())
+
+	for name, values := range n.Attributes() {
+		for _, value := range values {
+			out += fmt.Sprintf("%s: %s\n", name, value)
+		}
+	}
+
+	out += "\n"
+	return out
 }
 
 // Conn returns the underlaying *ldap.Conn.
@@ -106,27 +114,22 @@ func (n *N) DN() string {
 func (n *N) Attributes() map[string][]string {
 	out := map[string][]string{}
 
-	searchResult, err := n.Search(ScopeBase, "(objectClass=*)", []string{})
+	searchResult, err := n.conn.Search(
+		ldap.NewSearchRequest(n.DN(), int(ScopeBase), ldap.NeverDerefAliases, SizeLimit, TimeLimit,
+			false, "(objectClass=*)", []string{}, nil))
 	if err != nil {
-		return nil
+		panic(errors.WithStack(err))
 	}
 
-	for _, entry := range searchResult.Entries {
-		for _, attr := range entry.Attributes {
-			out[attr.Name] = attr.Values
-		}
+	if len(searchResult.Entries) != 1 {
+		panic(fmt.Errorf("unable to lookup: %s", n.DN()))
+	}
+
+	for _, attr := range searchResult.Entries[0].Attributes {
+		out[attr.Name] = attr.Values
 	}
 
 	return out
-}
-
-// Search takes a SearchScope, filter string and attrs []string and performs an LDAP search based
-// on their values.
-func (n *N) Search(scope SearchScope, filter string, attrs []string) (*ldap.SearchResult, error) {
-	return n.conn.Search(
-		ldap.NewSearchRequest(n.DN(), int(scope), ldap.NeverDerefAliases, SizeLimit, TimeLimit,
-			false, filter, attrs, nil,
-		))
 }
 
 func (n *N) newChild(dn string) Node {
@@ -136,6 +139,26 @@ func (n *N) newChild(dn string) Node {
 		root:   n.root,
 		parent: n,
 	}
+}
+
+// Search takes a SearchScope, filter string and attrs []string and performs an LDAP search based
+// on their values.
+func (n *N) Search(scope SearchScope, filter string, attrs []string) ([]Node, error) {
+	out := []Node{}
+
+	searchResult, err := n.conn.Search(
+		ldap.NewSearchRequest(n.DN(), int(scope), ldap.NeverDerefAliases, SizeLimit, TimeLimit,
+			false, filter, attrs, nil))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range searchResult.Entries {
+		node := n.newChild(entry.DN)
+		out = append(out, node)
+	}
+
+	return out, err
 }
 
 // Children takes a filter string and an attrs []string and performs an LDAP search based on their

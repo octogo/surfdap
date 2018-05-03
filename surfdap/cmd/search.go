@@ -43,11 +43,13 @@ func searchCmdRun(ccmd *cobra.Command, args []string) {
 
 	root := getRoot()
 
-	searchResult, err := root.Search(scope, searchFilter, strings.Split(searchAttrs, ","))
+	nodes, err := root.Search(scope, searchFilter, strings.Split(searchAttrs, ","))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	surfdap.DisplaySearchResults(scope, searchResult, os.Stdout)
+	for _, node := range nodes {
+		fmt.Println(node)
+	}
 }
