@@ -15,10 +15,10 @@ var (
 	searchAttrs  = ""
 )
 
-var scopeMap = map[string]surfdap.SearchScope{
-	"base": surfdap.ScopeBase,
-	"one":  surfdap.ScopeOne,
-	"sub":  surfdap.ScopeSub,
+var scopeMap = map[string]surfdap.Scope{
+	"base": surfdap.Base,
+	"one":  surfdap.One,
+	"sub":  surfdap.Sub,
 }
 
 var searchCmd = &cobra.Command{
@@ -43,7 +43,8 @@ func searchCmdRun(ccmd *cobra.Command, args []string) {
 
 	root := getRoot()
 
-	nodes, err := root.Search(scope, searchFilter, strings.Split(searchAttrs, ","))
+	nodes, err := root.Lookup(scope, surfdap.Filter(searchFilter),
+		strings.Split(searchAttrs, ","))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

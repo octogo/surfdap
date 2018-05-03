@@ -18,6 +18,7 @@ var (
 	ldapHost   string
 	ldapPort   uint16
 	ldapBaseDN string
+	ldapBindDN string
 )
 
 var rootCmd = &cobra.Command{
@@ -35,6 +36,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&ldapHost, "host", "H", "", "LDAP server URL.")
 	rootCmd.PersistentFlags().Uint16VarP(&ldapPort, "port", "P", 389, "Port of LDAP server.")
 	rootCmd.PersistentFlags().StringVarP(&ldapBaseDN, "base", "B", "", "search-base DN")
+	rootCmd.PersistentFlags().StringVarP(&ldapBindDN, "user", "U", "", "bind DN")
 
 	viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup("host"))
 	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup("port"))
@@ -72,10 +74,10 @@ func rootCmdPersistentPreRun(ccmd *cobra.Command, args []string) {
 
 func rootCmdRun(ccmd *cobra.Command, args []string) {
 	root := getRoot()
-	fmt.Println(root.DN())
+	fmt.Println(root.Entry().DN)
 }
 
-func getConfig() surfdap.Config {
+func getConfig() (h string, p uint16, tls bool, bDN string) {
 	host := viper.GetString("host")
 	if host == "" {
 		host = envy.Get("SURFDAP_HOST", "localhost")
@@ -90,20 +92,19 @@ func getConfig() surfdap.Config {
 			os.Exit(1)
 		}
 	}
+	useTLS := viper.GetBool("SURFDAP_TLS")
+
 	base := viper.GetString("base")
 	if base == "" {
 		base = envy.Get("SURFDAP_BASE", "")
 	}
 
-	return surfdap.Config{
-		Host:   host,
-		Port:   uint16(port),
-		BaseDN: base,
-	}
+	return host, uint16(port), useTLS, base
 }
 
-func getRoot() surfdap.Node {
-	root, err := surfdap.New(getConfig())
+func getRoot() surfdap.Surfer {
+	host, port, tls, base := getConfig()
+	root, err := surfdap.New(host, port, tls, base, ldapBindDN, "")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

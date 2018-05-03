@@ -28,26 +28,29 @@ import (
 )
 
 func main() {
-    // Obtain surfdap configuration
-    config := surfdap.Config{
-        Host: "localhost",
-        Port: 389,
-        BaseDN: dc=example,dc=org,
-    }
-
-    // Obtain root node.
-    root, err := surfdap.New(config)
+    surfer, err := surfdap.New("localhost", 389, false, "dc=example,dc=com", "", "")
     if err != nil {
         fmt.Println(err)
         os.Exit(1)
     }
 
-    // Navigate tree using root node.
-    fmt.Println(root.DN())          // DN of the root node
-    fmt.Println(root.Attributes())  // map[string][]string if all attributes of root node
-    fmt.Println(root.Children())    // []Node with all children of root node
-    fmt.Println(
-        root.Children()[0].Parent() // Parent node of first child equals root node
+    fmt.Println(surfer)
+    // dn: dc=example,dc=org
+    // objectClass: dcObject
+    // objectClass: organization
+    // dc: example
+    // o: Example Org
+
+    surfer.Entry()
+    // Return *ldap.Entry of the underlaying LDAP object.
+
+    surfer.Parent()
+    // Returns a surfdap.Surfer for the parent object of this object.
+
+    surfer.Lookup(
+        surfdap.One,
+        surfdap.Filter("(objectClass=*)"),
+        nil,
     )
 }
 ```
